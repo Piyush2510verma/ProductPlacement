@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Home Page{% endblock %}
+
+{% block content %}
+<div id="loader" class="hidden">Loading...</div>
+<div class="flex-col items-center justify-center">
+  <div class="flex flex-row justify-between mb-4">
+    <div class="flex-col">
+      <a class="text-blue-500 underline text-xs" href="{% static 'aiworker/walmart_products.csv' %}" download>Download Demo</a>
+      <label for="products-data" class="block mb-2">Products Data</label>
+      <input type="file" id="products-data" accept=".csv" />
+    </div>
+    <div class="flex-col">
+      <a class="text-blue-500 underline text-xs" href="{% static 'aiworker/walmart_purchases.csv' %}" download>Download Demo</a>
+      <label for="purchase-data" class="block mb-2">Purchase Data</label>
+      <input type="file" id="purchase-data" accept=".csv" />
+    </div>
+  </div>
+  <div class="flex flex-row justify-center">
+    <button id="upload-button" class="px-4 py-2 bg-blue-500 rounded-xl text-white">Upload Data</button>
+  </div>
+
+  <div id="imp-pairings-placeholder" class="flex flex-col justify-start w-1/2">
+    
+  </div>
+
+  <!-- AI Panel Placeholder -->
+  <div id="ai-panel-placeholder"></div>
+</div>
+
+<script>
+  document.getElementById("upload-button").addEventListener("click", function() {
+    const uploadButton = this;
+    const loader = document.getElementById("loader");
+
+    uploadButton.disabled = true;
+    uploadButton.textContent = "Uploading...";
+    loader.classList.remove("hidden");
+
+    const productsFile = document.getElementById("products-data").files[0];
+    const purchaseFile = document.getElementById("purchase-data").files[0];
+
+    if (!productsFile || !purchaseFile) {
+      alert("Upload Required Files");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("products_file", productsFile);
+    formData.append("purchase_file", purchaseFile);
+
+    axios.post('/api/initiate', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+    .then(response => {
+      if (response.data.accessAI) {
+        renderAIPanel(response.data.response, response.data.impPairings);
+      }
+      Toastify({
+        text: response.data.message,
+        className: "info",
+        style: {
+          background: "linear-gradient(to right, #00b09b, #96c93d)",
+        }
+      }).showToast();
+
+      uploadButton.disabled = false;
+      uploadButton.textContent = "Upload Data";
+      loader.classList.add("hidden");
+    })
+    .catch(error => {
+      console.error("There was an error uploading the files:", error);
+      uploadButton.disabled = false;
+      uploadButton.textContent = "Upload Data";
+      loader.classList.add("hidden");
+    });
+  });
+
+  function renderAIPanel(suggestion, pairings) {
+    const aiPanelHTML = `
+      <div class="flex flex-col items-center justify-center mt-4">
+        <button
+          class="fixed bottom-4 right-4 inline-flex items-center justify-center text-sm font-medium disabled:pointer-events-none disabled:opacity-50 border rounded-full w-16 h-16 bg-black hover:bg-gray-700 m-0 cursor-pointer border-gray-200 bg-none p-0 normal-case leading-5 hover:text-gray-900"
+          type="button" aria-haspopup="dialog" aria-expanded="false" data-state="closed">
+          <svg xmlns=" http://www.w3.org/2000/svg" width="30" height="40" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+            class="text-white block border-gray-200 align-middle">
+            <path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z" class="border-gray-200"></path>
+          </svg>
+        </button>
+        <div style="box-shadow: 0 0 #0000, 0 0 #0000, 0 1px 2px 0 rgb(0 0 0 / 0.05);"
+          class="fixed bottom-[calc(4rem+1.5rem)] right-0 mr-4 bg-white p-6 rounded-lg border border-[#e5e7eb] w-[440px] h-[634px]">
+          <div class="flex flex-col space-y-1.5 pb-6">
+            <h2 class="font-semibold text-lg tracking-tight">Walmart Chatbot</h2>
+            <p class="text-sm text-[#6b7280] leading-3">Created by Team CodePool</p>
+          </div>
+          <div id="chat-content" class="pr-4 h-[474px] flex flex-col gap-2 overflow-y-scroll" style="min-width: 100%;">
+            <!-- Chat messages will be inserted here -->
+          </div>
+          <div class="flex items-center pt-0">
+            <form id="ai-form" class="flex items-center justify-center w-full space-x-2">
+              <input
+                id="ai-input"
+                class="flex h-10 w-full rounded-md border border-[#e5e7eb] px-3 py-2 text-sm placeholder-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#9ca3af] disabled:cursor-not-allowed disabled:opacity-50 text-[#030712] focus-visible:ring-offset-2"
+                placeholder="Type your message" value="">
+              <button
+                class="inline-flex items-center justify-center rounded-md text-sm font-medium text-[#f9fafb] disabled:pointer-events-none disabled:opacity-50 bg-black hover:bg-[#111827E6] h-10 px-4 py-2">
+                Send</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const pairingHTML = `<h1 class="text-2xl font-bold">Important Pairs</h1><p>${formatResponse(pairings)}</p>`;
+
+    function formatResponse(responseText) {
+      let formattedText = responseText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+      formattedText = formattedText.replace(/\n/g, '<br>');
+  
+      formattedText = formattedText.replace(/^- (.*?)(\n|$)/gm, '<li>$1</li>');
+  
+      formattedText = formattedText.replace(/(<li>.*<\/li>)/g, '<ul>$1</ul>');
+  
+      return formattedText;
+    }
+
+    document.getElementById("ai-panel-placeholder").innerHTML = aiPanelHTML;
+
+    document.getElementById("imp-pairings-placeholder").innerHTML = pairingHTML;
+
+    addChatMessage("AI", formatResponse(suggestion));
+
+    document.getElementById("ai-form").addEventListener("submit", function(event) {
+      event.preventDefault();  
+
+      const userMessage = document.getElementById("ai-input").value.trim();
+
+      if (userMessage === "") return;
+
+      addChatMessage("You", userMessage);
+
+      const formData = new URLSearchParams();
+      formData.append('query', userMessage);
+
+      axios.post('/api/query', formData, {
+        headers : {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      })
+        .then(response => {
+          addChatMessage("AI", formatResponse(response.data.response));
+        })
+        .catch(error => {
+          console.error("There was an error processing the query:", error);
+        });
+
+      document.getElementById("ai-input").value = "";
+    });
+  }
+
+  function addChatMessage(sender, message) {
+    const chatContent = document.getElementById("chat-content");
+    const newMessage = `
+      <div class="flex gap-3 my-4 text-gray-600 text-sm flex-1">
+        <span class="relative flex shrink-0 overflow-hidden rounded-full w-8 h-8">
+          <div class="rounded-full bg-gray-100 border p-1">
+            <svg stroke="none" fill="black" stroke-width="1.5"
+                 viewBox="0 0 24 24" aria-hidden="true" height="20" width="20"
+                 xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z">
+              </path>
+            </svg>
+          </div>
+        </span>
+        <p class="leading-relaxed">
+          <span class="block font-bold text-gray-700">${sender}</span>
+          ${message}
+        </p>
+      </div>
+    `;
+    chatContent.innerHTML += newMessage;
+
+    chatContent.scrollTop = chatContent.scrollHeight;
+  }
+</script>
+
+{% endblock %}

@@ -1,1 +1,1 @@
-# ProductPlacement
+# walmart-product-placement-ai
